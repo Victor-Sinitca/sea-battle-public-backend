@@ -15,7 +15,6 @@ router.post('/', auth.optional, (req, res, next) => {
             },
         });
     }
-
     if(!user.password) {
         return res.status(422).json({
             errors: {
@@ -23,14 +22,13 @@ router.post('/', auth.optional, (req, res, next) => {
             },
         });
     }
-
     const finalUser = new Users(user);
-
     finalUser.setPassword(user.password);
-
     return finalUser.save()
         .then(() => res.json({ user: finalUser.toAuthJSON() }));
 });
+
+
 
 //POST login route (optional, everyone has access)
 router.post('/login', auth.optional, (req, res, next) => {
