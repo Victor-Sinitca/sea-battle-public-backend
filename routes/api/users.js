@@ -41,7 +41,6 @@ router.post('/login', auth.optional, (req, res, next) => {
             },
         });
     }
-
     if(!user.password) {
         return res.status(422).json({
             errors: {
