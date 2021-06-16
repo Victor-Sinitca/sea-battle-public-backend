@@ -76,11 +76,24 @@ const webSocketServer = new WebSocketServer.Server({
 let messages = [];
 
 webSocketServer.on('connection', function (ws,url) {
+    const token=url.url.split("=")[1]
+
+
+
+
+
     let id = Math.round(Math.random() * 1000000);
-    clients[id] = ws;
+    clients[id] = {
+        id:id,
+        webSocket:ws
+    };
     console.log("новое соединение " + id);
-    console.log("is websocet"+url.url)
-    /*console.log("is websocet"+ws.resourceURL.query)*/
+
+    console.log("is token="+token)
+
+
+
+
     ws.send(JSON.stringify(messages))
 
     ws.on('message', function (message) {
@@ -94,7 +107,7 @@ webSocketServer.on('connection', function (ws,url) {
         ]
         messages.push(newMessage[0])
         for (let key in clients) {
-            clients[key].send(JSON.stringify(newMessage))
+            clients[key].webSocket.send(JSON.stringify(newMessage))
         }
     });
 
