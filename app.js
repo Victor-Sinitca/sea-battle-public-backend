@@ -7,6 +7,8 @@ const mongoose = require('mongoose');
 const errorHandler = require('errorhandler');
 
 const http = require('http');
+const auth = require('./routes/auth')
+const jwt = require('jsonwebtoken')
 
 
 //Configure mongoose's promise to global promise
@@ -40,6 +42,7 @@ mongoose.set('debug', true);
 
 
 require('./models/Users');
+require('./models/UsersProfile');
 require('./config/passport');
 app.use(require('./routes'));
 
@@ -68,6 +71,9 @@ app.use((err, req, res) => {
     });
 });
 
+
+
+
 const WebSocketServer = new require('ws');
 let clients = {};
 const webSocketServer = new WebSocketServer.Server({
@@ -75,34 +81,38 @@ const webSocketServer = new WebSocketServer.Server({
 });
 let messages = [];
 
-webSocketServer.on('connection', function (ws,url) {
+const Profile = mongoose.model('UsersProfile');
+
+
+webSocketServer.on('connection',  async (ws,url,) => {
     const token=url.url.split("=")[1]
-
-
-
-
-
-    let id = Math.round(Math.random() * 1000000);
-    clients[id] = {
-        id:id,
+    const user = jwt.verify(token, 'secret', { algorithms: ['sha1', 'RS256', 'HS256'] }, function(err, decoded) {
+        return decoded;
+    });
+    console.log(user)
+    clients[user.id] = {
+        id:user.id,
         webSocket:ws
     };
-    console.log("новое соединение " + id);
+    console.log("новое соединение " + user.id);
 
-    console.log("is token="+token)
-
-
-
+    const profile = await Profile.findById(user.id)
+        .then((userProfile) => {
+            if(!userProfile) {
+                return null;
+            }
+            return userProfile;
+        });
+    console.log(profile)
 
     ws.send(JSON.stringify(messages))
-
     ws.on('message', function (message) {
         console.log('получено сообщение ' + message);
         const newMessage = [
             {   message: message,
-                photo: "",
-                userId: id,
-                userName: "" + id
+                photo: profile.photo?? "",
+                userId: user.id,
+                userName: profile.name
             }
         ]
         messages.push(newMessage[0])
@@ -110,13 +120,10 @@ webSocketServer.on('connection', function (ws,url) {
             clients[key].webSocket.send(JSON.stringify(newMessage))
         }
     });
-
     ws.on('close', function () {
-        console.log('соединение закрыто ' + id);
-        delete clients[id];
+        console.log('соединение закрыто ' + user.id);
+        delete clients[user.id];
     });
-
 });
-
 
 server.listen(8000, () => console.log('Server running on http://localhost:8000/'));

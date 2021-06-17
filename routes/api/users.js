@@ -3,11 +3,13 @@ const passport = require('passport');
 const router = require('express').Router();
 const auth = require('../auth');
 const Users = mongoose.model('Users');
+const Profile = mongoose.model('UsersProfile');
+
 
 //POST new user route (optional, everyone has access)
-router.post('/', auth.optional, (req, res, next) => {
+router.post('/', auth.optional, async (req, res, next) => {
     const { body: { user } } = req;
-
+    let userName="лошара"
     if(!user.email) {
         return res.status(422).json({
             errors: {
@@ -22,10 +24,22 @@ router.post('/', auth.optional, (req, res, next) => {
             },
         });
     }
+    if(user.name) {
+        userName = user.name
+    }
+
     const finalUser = new Users(user);
-    finalUser.setPassword(user.password);
-    return finalUser.save()
-        .then(() => res.json({ user: finalUser.toAuthJSON() }));
+    const profileFinalUser = new Profile({
+        _id:finalUser._id,
+        name: userName,
+        photo: "",
+        status: "I new user",});
+    await finalUser.setPassword(user.password);
+    await finalUser.save()
+    await profileFinalUser.save()
+    return  res.json({ user: {
+            ...finalUser.toAuthJSON(), ...{name:profileFinalUser.name}
+        }})
 });
 
 
@@ -74,7 +88,6 @@ router.get('/current', auth.required, (req, res, next) => {
             if(!user) {
                 return res.sendStatus(400);
             }
-
             return res.json({ user: user.toAuthJSON() });
         });
 });
