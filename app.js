@@ -72,54 +72,89 @@ app.use((err, req, res) => {
 });
 
 
-
-
 const WebSocketServer = new require('ws');
 let clients = {};
 const webSocketServer = new WebSocketServer.Server({
     server
 });
-let messages = [];
+let messages = []
+let games = []
 
 const Profile = mongoose.model('UsersProfile');
 
 
-webSocketServer.on('connection',  async (ws,url,) => {
-    const token=url.url.split("=")[1]
-    const user = jwt.verify(token, 'secret', { algorithms: ['sha1', 'RS256', 'HS256'] }, function(err, decoded) {
+webSocketServer.on('connection', async (ws, url,) => {
+    const token = url.url.split("=")[1]
+    const user = jwt.verify(token, 'secret', {algorithms: ['sha1', 'RS256', 'HS256']}, function (err, decoded) {
         return decoded;
     });
+
+
     console.log(user)
     clients[user.id] = {
-        id:user.id,
-        webSocket:ws
+        id: user.id,
+        webSocket: ws
     };
     console.log("новое соединение " + user.id);
 
     const profile = await Profile.findById(user.id)
         .then((userProfile) => {
-            if(!userProfile) {
+            if (!userProfile) {
                 return null;
             }
             return userProfile;
         });
     console.log(profile)
 
-    ws.send(JSON.stringify(messages))
+    ws.send(JSON.stringify({
+        eventName: "allDate",
+        date: {
+            messages: messages,
+            games: games
+        }
+    }))
+
+
     ws.on('message', function (message) {
         console.log('получено сообщение ' + message);
-        const newMessage = [
-            {   message: message,
-                photo: profile.photo?? "",
+        const newMessageDate = JSON.parse(message)
+        if (newMessageDate.eventName === "listGame") {
+            const newGame = [{
+                nameGame:newMessageDate.date.nameGame,
+                userId: user.id,
+                userName: profile.name,
+            }]
+
+            games.push(newGame[0])
+            for (let key in clients) {
+                clients[key].webSocket.send(JSON.stringify({
+                    eventName: "listGame",
+                    date: {
+                        games: newGame
+                    }
+                }))
+            }
+        }
+        if (newMessageDate.eventName === "message") {
+            const newMessage = [{
+                message: newMessageDate.date.messages,
+                photo: profile.photo ?? "",
                 userId: user.id,
                 userName: profile.name
+            }]
+            messages.push(newMessage[0])
+            for (let key in clients) {
+                clients[key].webSocket.send(JSON.stringify({
+                    eventName: "message",
+                    date: {
+                        messages: newMessage,
+                    }
+                }))
             }
-        ]
-        messages.push(newMessage[0])
-        for (let key in clients) {
-            clients[key].webSocket.send(JSON.stringify(newMessage))
         }
     });
+
+
     ws.on('close', function () {
         console.log('соединение закрыто ' + user.id);
         delete clients[user.id];
