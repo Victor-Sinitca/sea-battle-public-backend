@@ -9,6 +9,8 @@ const errorHandler = require('errorhandler');
 const http = require('http');
 const auth = require('./routes/auth')
 const jwt = require('jsonwebtoken')
+const {v1} = require('uuid');
+/*import {v1} from "uuid"*/
 
 
 //Configure mongoose's promise to global promise
@@ -79,6 +81,7 @@ const webSocketServer = new WebSocketServer.Server({
 });
 let messages = []
 let games = []
+let gamesRooms = []
 
 const Profile = mongoose.model('UsersProfile');
 
@@ -88,15 +91,12 @@ webSocketServer.on('connection', async (ws, url,) => {
     const user = jwt.verify(token, 'secret', {algorithms: ['sha1', 'RS256', 'HS256']}, function (err, decoded) {
         return decoded;
     });
-
-
     console.log(user)
     clients[user.id] = {
         id: user.id,
         webSocket: ws
     };
     console.log("новое соединение " + user.id);
-
     const profile = await Profile.findById(user.id)
         .then((userProfile) => {
             if (!userProfile) {
@@ -104,25 +104,35 @@ webSocketServer.on('connection', async (ws, url,) => {
             }
             return userProfile;
         });
+    if (!profile) {
+        ws.close(JSON.stringify({
+            eventName: "errorAuthorize",
+            date: {messages: "you are not logged in",}
+        }))
+    }
     console.log(profile)
-
     ws.send(JSON.stringify({
         eventName: "allDate",
         date: {
             messages: messages,
-            games: games
+            games: games,
         }
     }))
-
+    const sendRoom = gamesRooms.filter(r => (user.id === r.firstUser.id || user.id === r.secondUser.id))
+    ws.send(JSON.stringify({
+        eventName: "acceptGameOfId",
+        date: sendRoom
+    }))
 
     ws.on('message', function (message) {
         console.log('получено сообщение ' + message);
         const newMessageDate = JSON.parse(message)
         if (newMessageDate.eventName === "listGame") {
             const newGame = [{
-                nameGame:newMessageDate.date.nameGame,
+                nameGame: newMessageDate.date.nameGame,
                 userId: user.id,
                 userName: profile.name,
+                id: v1()
             }]
 
             games.push(newGame[0])
@@ -151,6 +161,57 @@ webSocketServer.on('connection', async (ws, url,) => {
                     }
                 }))
             }
+        }
+        if (newMessageDate.eventName === "deleteGameOfId") {
+            games = games.filter(game => {
+                if (game.id === newMessageDate.date.id) {
+                    for (let key in clients) {
+                        clients[key].webSocket.send(JSON.stringify({
+                            eventName: "deleteGameOfId",
+                            date: {
+                                message: `game id = ${newMessageDate.date.id} is delete`,
+                                idGameDelete: newMessageDate.date.id
+                            }
+                        }))
+                    }
+                    return false
+                } else return true
+            });
+        }
+        if (newMessageDate.eventName === "acceptGameOfId") {
+            games = games.filter(game => {
+                if (game.id === newMessageDate.date.id
+                    && game.userId !== user.id) {
+                    const gameRoom = {
+                        firstUser: {
+                            id: game.userId,
+                            name: game.userName
+                        },
+                        secondUser: {
+                            id: user.id,
+                            name: profile.name
+                        },
+                        gamesRoomId: v1()
+                    }
+                    gamesRooms.push(gameRoom)
+                    for (let key in clients) {
+                        if (clients[key].id === game.userId || clients[key].id === user.id) {
+                            clients[key].webSocket.send(JSON.stringify({
+                                eventName: "acceptGameOfId",
+                                date: [gameRoom]
+                            }))
+                        }
+                        clients[key].webSocket.send(JSON.stringify({
+                            eventName: "deleteGameOfId",
+                            date: {
+                                message: `game id = ${newMessageDate.date.id} is accept`,
+                                idGameDelete: newMessageDate.date.id
+                            }
+                        }))
+                    }
+                    return false
+                } else return true
+            });
         }
     });
 
