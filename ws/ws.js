@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 const {v1} = require('uuid');
 const setShot = require('../logicsGame/setShot');
+const setShip = require('../logicsGame/setShip');
+const checkForShipInput = require('../logicsGame/checkForSingleShipInput');
+const deleteShipFromTheMap = require('../logicsGame/deleteShipFromTheMap');
 require('../models/Users');
 require('../models/UsersProfile');
 
@@ -12,6 +15,9 @@ let gameRooms = []
 let startedGames = []
 const Profile = mongoose.model('UsersProfile');
 
+function getRandomInt(max) {
+    return Math.floor(Math.random() * Math.floor(max));
+}
 
 const initMap = () => {
     let map = Array.from(Array(10), () => new Array(10))
@@ -61,6 +67,10 @@ const createGame = (gameId, firstUser, secondUser) => {
                 numberShips2: 3,
                 numberShips3: 2,
                 numberShips4: 1,
+            },
+            settingShipUser: {
+                firstUser: true,
+                secondUser: true,
             },
         }
     }
@@ -202,48 +212,256 @@ const getWs = async (ws, url, token, user) => {
             }))
         }
 
-
-
-
-
-
-        if (newMessageDate.eventName === "userTurn") {
-/*            const newMessageDateReceived = {
-                eventName: "userTurn",
+        if (newMessageDate.eventName === "startGameSetShip") {
+            /*const newMessageDateReceived = {
+                eventName: "startGameSetShip",
                 date: {
-                    gameId: "",
-                    userTurnId: "",
-                    sectorFire: {
-                        x: number,
-                        y: number,
-                    }
+                    sector: {
+                        x: sector.x,
+                        y: sector.y,
+                    },
+                    gameId: gameId,
+                    userId: userId,
+                    horizonSetShip: horizonSetShip,
+                    whatSetShip: whatSetShip
                 }
             }*/
             startedGames.forEach(function (item, index, array) {
                 if ((item.gameId === newMessageDate.date.gameId) &&
-                    ((newMessageDate.date.userTurnId === item.firstUser) === item.gameData.FUTurn.turn)) {
-                    item.gameData=setShot(item.gameData,newMessageDate.date.sectorFire)
+                    ((newMessageDate.date.userId === item.firstUser.id) === item.gameData.settingShipUser.firstUser)) {
+                    item.gameData = setShip(item.gameData, true, newMessageDate.date.sector,
+                        newMessageDate.date.horizonSetShip, newMessageDate.date.whatSetShip)
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    ((newMessageDate.date.userId === item.secondUser.id) === item.gameData.settingShipUser.secondUser)) {
+                    item.gameData = setShip(item.gameData, false, newMessageDate.date.sector,
+                        newMessageDate.date.horizonSetShip, newMessageDate.date.whatSetShip)
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+            });
+        }
+        if (newMessageDate.eventName === "startGameDeleteShip") {
+            /*const newMessageDateReceived = {
+                eventName: "startGameDeleteShip",
+                date: {
+                    sector: {
+                        ship: boolean,
+                        shot: boolean,
+                        x: number,
+                        y: number,
+                        unlock: boolean,
+                        img: null | number
+                    },
+                    gameId: gameId,
+                    userId: userId
+                }
+            }*/
+            startedGames.forEach(function (item, index, array) {
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    ((newMessageDate.date.userId === item.firstUser.id) === item.gameData.settingShipUser.firstUser)) {
+                    item.gameData = deleteShipFromTheMap(item.gameData,newMessageDate.date.sector,true)
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    ((newMessageDate.date.userId === item.secondUser.id) === item.gameData.settingShipUser.secondUser)) {
+                    item.gameData = item.gameData = deleteShipFromTheMap(item.gameData,newMessageDate.date.sector,false)
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+            });
+        }
+        if (newMessageDate.eventName === "startGameSetShipsRandom") {
+            /* const newMessageDateReceived = {
+                 eventName: "startGameSetShipsRandom",
+                 date: {
+                     gameId: gameId,
+                     userId: userId
+                 }
+             }*/
+            startedGames.forEach(function (item, index, array) {
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.firstUser.id) && item.gameData.settingShipUser.firstUser) {
+                    item.gameData.FUMap = initMap()
+                    item.gameData.FUShips = {
+                        ship1: 4,
+                        ship2: 3,
+                        ship3: 2,
+                        ship4: 1,
+                        numberShips1: 4,
+                        numberShips2: 3,
+                        numberShips3: 2,
+                        numberShips4: 1,
+                    }
+                    let horizon = true;
+                    let shipInputState = [];
+                    for (let shipValue = 4; shipValue >= 1; shipValue--) {
+                        for (let numberOfShips = shipValue; numberOfShips <= 4; numberOfShips++) {
+                            horizon = Boolean(getRandomInt(2))
+                            shipInputState = checkForShipInput(item.gameData.FUMap, horizon, shipValue, false).shipInputState;
+                            item.gameData = setShip(item.gameData, true, shipInputState[getRandomInt(shipInputState.length)],
+                                horizon, shipValue)
+                        }
+                    }
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.secondUser.id) && item.gameData.settingShipUser.secondUser) {
+
+                    item.gameData.SUMap = initMap()
+                    item.gameData.SUShips = {
+                        ship1: 4,
+                        ship2: 3,
+                        ship3: 2,
+                        ship4: 1,
+                        numberShips1: 4,
+                        numberShips2: 3,
+                        numberShips3: 2,
+                        numberShips4: 1,
+                    }
+                    let horizon = true;
+                    let shipInputState = [];
+                    for (let shipValue = 4; shipValue >= 1; shipValue--) {
+                        for (let numberOfShips = shipValue; numberOfShips <= 4; numberOfShips++) {
+                            horizon = Boolean(getRandomInt(2))
+                            shipInputState = checkForShipInput(item.gameData.SUMap, horizon, shipValue, false).shipInputState;
+                            item.gameData = setShip(item.gameData, false, shipInputState[getRandomInt(shipInputState.length)],
+                                horizon, shipValue)
+                        }
+                    }
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+            });
+        }
+        if (newMessageDate.eventName === "startGameClearMap") {
+            /* const newMessageDateReceived = {
+                 eventName: "startGameSetShipsRandom",
+                 date: {
+                     gameId: gameId,
+                     userId: userId
+                 }
+             }*/
+            startedGames.forEach(function (item, index, array) {
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.firstUser.id) && item.gameData.settingShipUser.firstUser) {
+                    item.gameData.FUMap = initMap()
+                    item.gameData.FUShips = {
+                        ship1: 4,
+                        ship2: 3,
+                        ship3: 2,
+                        ship4: 1,
+                        numberShips1: 4,
+                        numberShips2: 3,
+                        numberShips3: 2,
+                        numberShips4: 1,
+                    }
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.secondUser.id) && item.gameData.settingShipUser.secondUser) {
+                    item.gameData.SUMap = initMap()
+                    item.gameData.SUShips = {
+                        ship1: 4,
+                        ship2: 3,
+                        ship3: 2,
+                        ship4: 1,
+                        numberShips1: 4,
+                        numberShips2: 3,
+                        numberShips3: 2,
+                        numberShips4: 1,
+                    }
+                    ws.send(JSON.stringify({
+                        eventName: "startGame",
+                        date: [item]
+                    }))
+                }
+            });
+        }
+        if (newMessageDate.eventName === "startGameUser") {
+            /*            const newMessageDateReceived = {
+                            eventName: "startGameUser",
+                            date: {
+                                gameId: gameId,
+                                userId: userId
+                            }
+                        }*/
+            startedGames.forEach(function (item, index, array) {
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    ((newMessageDate.date.userId === item.firstUser.id) === item.gameData.settingShipUser.firstUser)) {
+                    item.gameData.settingShipUser.firstUser = false
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    ((newMessageDate.date.userId === item.secondUser.id) === item.gameData.settingShipUser.secondUser)) {
+                    item.gameData.settingShipUser.secondUser = false
+                }
+                ws.send(JSON.stringify({
+                    eventName: "startGame",
+                    date: [item]
+                }))
+            });
+        }
+        if (newMessageDate.eventName === "startGameSetShot") {
+/*                        const newMessageDateReceived = {
+                            eventName: "userTurn",
+                            date: {
+                                gameId: "",
+                                userId: "",
+                                sector: {
+                                    ship: boolean,
+                                    shot: boolean,
+                                    x: number,
+                                    y: number,
+                                    unlock: boolean,
+                                    img: null | number
+                                }
+                            }
+                        }*/
+            startedGames.forEach(function (item, index, array) {
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.firstUser.id) && item.gameData.FUTurn.turn) {
+                    item.gameData = setShot(item.gameData, true, newMessageDate.date.sector)
                     for (let key in clients) {
-                        if (clients[key].id === item.firstUser || clients[key].id === item.secondUser) {
+                        if (clients[key].id === item.firstUser.id || clients[key].id === item.secondUser.id) {
                             clients[key].webSocket.send(JSON.stringify({
-                                eventName: "userTurn",
-                                date: item
+                                eventName: "startGame",
+                                date: [item]
+                            }))
+                        }
+                    }
+                }
+                if ((item.gameId === newMessageDate.date.gameId) &&
+                    (newMessageDate.date.userId === item.secondUser.id) && !item.gameData.FUTurn.turn) {
+                    item.gameData = setShot(item.gameData,false, newMessageDate.date.sector)
+                    for (let key in clients) {
+                        if (clients[key].id === item.firstUser.id || clients[key].id === item.secondUser.id) {
+                            clients[key].webSocket.send(JSON.stringify({
+                                eventName: "startGame",
+                                date: [item]
                             }))
                         }
                     }
                 }
             });
-
-
-
-
-
-
-
-            ws.send(JSON.stringify({
-                eventName: "startGame",
-                date: sendGame
-            }))
         }
 
 
