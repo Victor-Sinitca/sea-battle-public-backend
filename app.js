@@ -14,7 +14,7 @@ const getWs = require('./ws/ws');
 //Configure mongoose's promise to global promise
 mongoose.promise = global.Promise;
 
-
+/*const hfjnfjd=""*/
 //Configure isProduction variable
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -81,4 +81,4 @@ webSocketServer.on('connection',  async (ws, url,) => {
     });
     await  getWs(ws,url,token,user)
 });
-server.listen(8000, () => console.log('Server running on http://localhost:8000/'));
+server.listen(8000, `192.168.35.2`, () => console.log('Server running on http://localhost:8000/'));
